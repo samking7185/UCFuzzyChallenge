@@ -33,6 +33,7 @@ class FuzzyController(ControllerBase):
         :param ship: Object to use when controlling the SpaceShip
         :param input_data: Input data which describes the current state of the environment
         """
+
         # ship.turn_rate = 180.0
         ship.thrust = ship.thrust_range[1]
         ship.shoot()

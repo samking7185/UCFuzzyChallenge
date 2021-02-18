@@ -1,6 +1,6 @@
 from fuzzy_asteroids.fuzzy_asteroids import AsteroidGame, FuzzyAsteroidGame
 
-from src.sample_controller import FuzzyController
+from controller import FuzzyController
 
 
 if __name__ == "__main__":
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     }
 
     # Whether the users controller should be run
-    run_with_controller = 0
+    run_with_controller = 1
 
     # Run with FuzzyController
     if run_with_controller:
