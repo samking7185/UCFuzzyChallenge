@@ -11,7 +11,7 @@ if __name__ == "__main__":
         # "frequency": 60,
         "real_time_multiplier": 2,
         # "lives": 3,
-        # "prints": True,
+        "prints": False,
         # "allow_key_presses": False
     }
 
@@ -23,6 +23,7 @@ if __name__ == "__main__":
         # Instantiate the environment
         game = FuzzyAsteroidGame(settings=settings)
         score = game.run(controller=FuzzyController())
+        print(score)
 
     else:
         # Run the Asteroids game with no

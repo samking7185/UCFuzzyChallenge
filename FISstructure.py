@@ -25,7 +25,7 @@ class FIS:
         self.rules = rulebase
         self.rulebase = Rulebase()
 
-    def compute(self, in1: float, in2: float):
+    def compute(self, in1, in2):
 
         rules = self.rules
         Fr = self.rulebase
@@ -58,12 +58,12 @@ class FIS:
                 rule_temp = Fr.AND_rule([r1, r2])
                 rule_combos.append(rule_temp)
 
-        full_out_array = [[], [], [], [], [], [], []]
+        out_array = [[] for i in range(len(outMF))]
 
         for rule, combo in zip(rules, rule_combos):
-            full_out_array[rule].append(combo)
+            out_array[rule].append(combo)
 
-        out_array = [out for out in full_out_array if out != []]
+        # out_array = [out for out in full_out_array if out != []]
 
         mu_array = list(map(Fr.OR_rule, out_array))
 
@@ -72,3 +72,48 @@ class FIS:
         output = out.defuzz_out()
         return output
 
+
+class SingleFIS:
+    def __init__(self, membership, rulebase):
+
+        inMF_values = membership[0]
+        outMF_values = membership[1]
+
+        in1MF = []
+        in2MF = []
+
+        for mf1 in inMF_values:
+            in1MF_temp = Membership(mf1)
+            in1MF.append(in1MF_temp)
+
+        self.mf1 = in1MF
+        self.out = outMF_values
+        self.rules = rulebase
+
+    def compute(self, in1):
+
+        rules = self.rules
+        in1MF = self.mf1
+        outMF = self.out
+
+        input1 = []
+
+        for idx, mf in enumerate(in1MF):
+            if idx == 0:
+                input1.append(mf.lshlder(in1))
+            elif idx == len(in1MF):
+                input1.append(mf.rshlder(in1))
+            else:
+                input1.append(mf.triangle(in1))
+
+        full_out_array = [[], [], [], [], [], [], []]
+
+        for rule, combo in zip(rules, input1):
+            full_out_array[rule].append(combo)
+
+        out_array = [out for out in full_out_array if out != []]
+
+        out = Defuzz(out_array, outMF)
+
+        output = out.defuzz_out()
+        return output

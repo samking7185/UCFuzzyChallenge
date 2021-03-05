@@ -4,7 +4,7 @@ import numpy as np
 import itertools
 from fuzzy import Membership, Rulebase, Defuzz
 from fuzzy_asteroids.fuzzy_controller import ControllerBase, SpaceShip
-from FISstructure import FIS
+from FISstructure import FIS, SingleFIS
 
 class FuzzyController(ControllerBase):
     """
@@ -42,42 +42,14 @@ class FuzzyController(ControllerBase):
 
         steerMF_values = [(-100, -99, 1), (-2, 0, 2), (1, 99, 100)]
 
-        drDMF1 = Membership(dr_distMF_values[0])
-        drDMF2 = Membership(dr_distMF_values[1])
-        drDMF3 = Membership(dr_distMF_values[2])
-        drDMF4 = Membership(dr_distMF_values[3])
+        targetRules = [0, 0, 0, 1, 1, 1, 0, 0, 0]
+        targetFIS = FIS([angleMF_values, distanceMF_values, shootMF_values], targetRules)
 
-        drAMF1 = Membership(dr_angMF_values[0])
-        drAMF2 = Membership(dr_angMF_values[1])
-        drAMF3 = Membership(dr_angMF_values[2])
-        drAMF4 = Membership(dr_angMF_values[3])
-        drAMF5 = Membership(dr_angMF_values[4])
-        drAMF6 = Membership(dr_angMF_values[5])
-        drAMF7 = Membership(dr_angMF_values[6])
+        shootRules = [0, 1, 2]
+        shootFIS = SingleFIS([aimMF_values, steerMF_values], shootRules)
 
-        aMF1 = Membership(angleMF_values[0])
-        aMF2 = Membership(angleMF_values[1])
-        aMF3 = Membership(angleMF_values[2])
-
-        dMF1 = Membership(distanceMF_values[0])
-        dMF2 = Membership(distanceMF_values[1])
-        dMF3 = Membership(distanceMF_values[2])
-
-        sMF1 = Membership(aimMF_values[0])
-        sMF2 = Membership(aimMF_values[1])
-        sMF3 = Membership(aimMF_values[2])
-
-        self.drTMF = dr_thrustMF_values
-        self.drSMF = dr_steerMF_values
-        self.drDMF = [drDMF1, drDMF2, drDMF3, drDMF4]
-        self.drAMF = [drAMF1, drAMF2, drAMF3, drAMF4, drAMF5, drAMF6, drAMF7]
-        self.MF1 = [aMF1, aMF2, aMF3]
-        self.MF2 = [dMF1, dMF2, dMF3]
-        self.MF3 = shootMF_values
-        self.MF4 = [sMF1, sMF2, sMF3]
-        self.MF5 = steerMF_values
-        self.Fr1 = Rulebase()
-        self.idx = 0
+        self.shoot = shootFIS
+        self.target = targetFIS
 
     def actions(self, ship: SpaceShip, input_data: Dict[str, Tuple]) -> None:
         """
@@ -116,11 +88,11 @@ class FuzzyController(ControllerBase):
             ypath = y + np.multiply(np.arange(1, n, 1), vy)
             return np.stack((xpath, ypath))
 
-        def get_distance(self, asteroid_list):
+        def get_xy_distance(x1, y1, x2, y2):
+            distance1 = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+            return distance1
 
-            def get_xy_distance(x1, y1, x2, y2):
-                distance1 = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-                return distance1
+        def get_distance(self, asteroid_list):
             asteroid_array = []
             if not asteroid_list:
                 return None
@@ -161,11 +133,7 @@ class FuzzyController(ControllerBase):
             return angle
 
 # Targeting FIS
-        aMF1, aMF2, aMF3 = self.MF1
-        dMF1, dMF2, dMF3 = self.MF2
-        sMF1, sMF2, sMF3 = self.MF4
-        Fr1 = self.Fr1
-
+        targetFIS = self.target
         asteroid_list = input_data['asteroids']
         angle = get_angle(self, asteroid_list)
         distance = get_distance(self, asteroid_list)
@@ -175,37 +143,7 @@ class FuzzyController(ControllerBase):
             for ang, dist in zip(angle, distance):
                 in1 = ang
                 in2 = dist
-
-                angleMF1 = aMF1.lshlder(in1)
-                angleMF2 = aMF2.triangle(in1)
-                angleMF3 = aMF3.rshlder(in1)
-
-                distanceMF1 = dMF1.lshlder(in2)
-                distanceMF2 = dMF2.triangle(in2)
-                distanceMF3 = dMF3.rshlder(in2)
-
-                F_rules = [Fr1.AND_rule([angleMF1, distanceMF1]), Fr1.AND_rule([angleMF1, distanceMF2]), Fr1.AND_rule([angleMF1, distanceMF3]),
-                           Fr1.AND_rule([angleMF2, distanceMF1]), Fr1.AND_rule([angleMF2, distanceMF2]), Fr1.AND_rule([angleMF2, distanceMF3]),
-                           Fr1.AND_rule([angleMF3, distanceMF1]), Fr1.AND_rule([angleMF3, distanceMF2]), Fr1.AND_rule([angleMF3, distanceMF3])
-                           ]
-
-                F_shoot = []
-                F_dont_shoot = []
-
-                fRules = [1, 1, 1, 2, 2, 2, 1, 1, 1]
-
-                for idx, rule in enumerate(fRules):
-                    if rule == 2.0:
-                        F_shoot.append(F_rules[idx])
-                    elif rule == 1.0:
-                        F_dont_shoot.append(F_rules[idx])
-
-                F_s = Fr1.OR_rule(F_shoot)
-                F_d = Fr1.OR_rule(F_dont_shoot)
-
-                F_mu = [F_d, F_s]
-                F_out = Defuzz(F_mu, self.MF3)
-                output = F_out.defuzz_out()
+                output = targetFIS.compute(in1, in2)
                 shoot_list.append(output)
 
             if any(x > 6 for x in shoot_list):
@@ -220,16 +158,11 @@ class FuzzyController(ControllerBase):
             s = collision_norms.index(min(collision_norms, key=min))
 
 # Aiming FIS
+            shootFIS = self.shoot
             shoot_idx = np.argmin(np.absolute(angle))
             shoot_angle = angle[s]
 
-            steerMF1 = sMF1.lshlder(shoot_angle)
-            steerMF2 = sMF2.triangle(shoot_angle)
-            steerMF3 = sMF3.rshlder(shoot_angle)
-
-            F_mus = [steerMF1, steerMF2, steerMF3]
-            F_out2 = Defuzz(F_mus, self.MF5)
-            output2 = F_out2.defuzz_out()
+            output2 = shootFIS.compute(shoot_angle)
             ship.turn_rate = output2
 
 # Guidance Section
