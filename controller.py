@@ -1,10 +1,9 @@
 from typing import Tuple, Dict, Any
 import math
 import numpy as np
-import itertools
-from fuzzy import Membership, Rulebase, Defuzz
 from fuzzy_asteroids.fuzzy_controller import ControllerBase, SpaceShip
 from FISstructure import FIS, SingleFIS
+import itertools
 
 class FuzzyController(ControllerBase):
     """
@@ -20,25 +19,29 @@ class FuzzyController(ControllerBase):
 
     By defining these interfaces, this class will work correctly
     """
-    def __init__(self):
+    def __init__(self, gene):
         """
         Create your fuzzy logic controllers and other objects here
         """
+        gene = gene[0]
+        angle_geneN = sorted(gene[0])
+        angle_geneP = sorted(gene[1])
 
-        dr_distMF_values = [(0, 5, 10), (5, 50, 75), (70, 250, 500), (450, 550, 1200)]
-        dr_angMF_values = [(-360, -250, -150), (-250, -150, -50), (-100, -50, 0), (-15, 0, 15),
-                           (0, 50, 100), (50, 150, 250), (150, 250, 360)]
+        dist_gene = sorted(gene[2])
 
-        dr_steerMF_values = [(-180, -90, 0), (-2, 0, 2), (0, 90, 180)]
-        dr_thrustMF_values = [(0, 2, 4), (60, 80, 100), (80, 100, 120), (100, 120, 200)]
+        angle_geneN = [x * 360 for x in angle_geneN]
+        angle_geneP = [x * 360 for x in angle_geneP]
 
-        angleMF_values = [(-360, -60, -2), (-2, 0, 2), (2, 60, 360)]
+        angleMF_values = [(-360, angle_geneN[0], angle_geneN[1]),
+                          (angle_geneN[2], 0,  angle_geneP[0]), ( angle_geneP[1],  angle_geneP[2], 360)]
 
-        distanceMF_values = [(0, 0, 20), (10, 100, 200), (10, 999, 1000)]
+        distanceMF_values = [(0, dist_gene[0], dist_gene[1]),
+                             (dist_gene[2], dist_gene[3], dist_gene[4]),
+                             (dist_gene[5], dist_gene[6], 1000)]
 
         shootMF_values = [(0, 3, 6), (4, 8, 10)]
 
-        aimMF_values = [(-180, -90, -1), (-2, 0, 2), (1, 90, 180)]
+        aimMF_values = [(-180, -90, -0.5), (-1, 0, 1), (0.5, 90, 180)]
 
         steerMF_values = [(-100, -99, 1), (-2, 0, 2), (1, 99, 100)]
 
@@ -50,6 +53,11 @@ class FuzzyController(ControllerBase):
 
         self.shoot = shootFIS
         self.target = targetFIS
+
+        avoidMF_values = [(-180, -60, -30), (-40, -20, 0), (0, 20, 400), (30, 60, 1800)]
+        avoidRules = [0, 1, 2, 0]
+        avoidFIS = SingleFIS([avoidMF_values, steerMF_values], avoidRules)
+        self.avoid = avoidFIS
 
     def actions(self, ship: SpaceShip, input_data: Dict[str, Tuple]) -> None:
         """
@@ -92,7 +100,7 @@ class FuzzyController(ControllerBase):
             distance1 = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
             return distance1
 
-        def get_distance(self, asteroid_list):
+        def get_distance(asteroid_list):
             asteroid_array = []
             if not asteroid_list:
                 return None
@@ -103,8 +111,7 @@ class FuzzyController(ControllerBase):
                 asteroid_array.append(current_distance)
             return asteroid_array
 
-
-        def get_angle(self, asteroid_list):
+        def get_angle(asteroid_list):
             angle_array = []
 
             if not asteroid_list:
@@ -125,7 +132,7 @@ class FuzzyController(ControllerBase):
 
             return angle_array
 
-        def get_drive_angle(self, goal):
+        def get_drive_angle(goal):
             local_x = ship.center_x - goal[0]
             local_y = ship.center_y - goal[1]
             phi = math.atan2(local_y, local_x) * 180 / math.pi
@@ -134,22 +141,27 @@ class FuzzyController(ControllerBase):
 
 # Targeting FIS
         targetFIS = self.target
+        avoidFIS = self.avoid
+
         asteroid_list = input_data['asteroids']
-        angle = get_angle(self, asteroid_list)
-        distance = get_distance(self, asteroid_list)
+        angle = get_angle(asteroid_list)
+        distance = get_distance(asteroid_list)
 
         shoot_list = []
+        avoid_list = []
         if angle and distance:
             for ang, dist in zip(angle, distance):
                 in1 = ang
                 in2 = dist
                 output = targetFIS.compute(in1, in2)
+                output1 = avoidFIS.compute(in1)
+                avoid_list.append(output1)
                 shoot_list.append(output)
 
-            if any(x > 6 for x in shoot_list):
+            if any(x > 7.15 for x in shoot_list):
                 ship.shoot()
 
-            n = 10
+            n = 30
             asteroid_path = extend_path(asteroid_list, n)
             player_path = extend_player_path(ship, n)
 
@@ -157,53 +169,20 @@ class FuzzyController(ControllerBase):
             collision_norms = list(map(extract_norms, collision_array))
             s = collision_norms.index(min(collision_norms, key=min))
 
-# Aiming FIS
+            # Aiming FIS
             shootFIS = self.shoot
             shoot_idx = np.argmin(np.absolute(angle))
             shoot_angle = angle[s]
 
             output2 = shootFIS.compute(shoot_angle)
-            ship.turn_rate = output2
+            collision_list = list(itertools.chain.from_iterable(collision_norms))
 
-# Guidance Section
-#         goal_list = [np.array([600, 300]), np.array([600, 400]), np.array([100, 400]), np.array([100, 100]), np.array([100, 400])]
-#         if self.idx < len(goal_list):
-#             goal = goal_list[self.idx]
-#         else:
-#             goal = np.array([ship.center_x, ship.center_y])
-#
-#         goal_diff = goal - np.array([ship.center_x, ship.center_y])
-#         goal_dist = np.linalg.norm(goal_diff)
-#         if goal_dist < 10:
-#             self.idx += 1
-#
-#         goal_angle = get_drive_angle(self, goal)
-#
-#         drDMF1, drDMF2, drDMF3, drDMF4 = self.drDMF
-#         drAMF1, drAMF2, drAMF3, drAMF4, drAMF5, drAMF6, drAMF7 = self.drAMF
-#
-#         dr_distMF1 = drDMF1.lshlder(goal_dist)
-#         dr_distMF2 = drDMF2.triangle(goal_dist)
-#         dr_distMF3 = drDMF3.triangle(goal_dist)
-#         dr_distMF4 = drDMF4.rshlder(goal_dist)
-#         dr_angleMF1 = drAMF1.lshlder(goal_angle)
-#         dr_angleMF2 = drAMF2.triangle(goal_angle)
-#         dr_angleMF3 = drAMF3.triangle(goal_angle)
-#         dr_angleMF4 = drAMF4.triangle(goal_angle)
-#         dr_angleMF5 = drAMF5.triangle(goal_angle)
-#         dr_angleMF6 = drAMF6.triangle(goal_angle)
-#         dr_angleMF7 = drAMF7.rshlder(goal_angle)
-#
-#         dr_distMU = [dr_distMF1, dr_distMF2, dr_distMF3, dr_distMF4]
-#         dr_angMU = [Fr1.OR_rule([dr_angleMF1, dr_angleMF2, dr_angleMF3]),
-#                     dr_angleMF4,
-#                     Fr1.OR_rule([dr_angleMF5, dr_angleMF6, dr_angleMF7])]
-#
-#         F_out3 = Defuzz(dr_distMU, self.drTMF)
-#         output3 = F_out3.defuzz_out()
-#
-#         F_out4 = Defuzz(dr_angMU, self.drSMF)
-#         output4 = F_out4.defuzz_out()
-#
-#         ship.thrust = output3
-#         ship.turn_rate = output4
+            if any(y < 75 for y in collision_list):
+                # ship.turn_rate = output2
+                ship.thrust = -150
+                abs_list = list(map(abs, avoid_list))
+                t = abs_list.index(max(abs_list))
+                ship.turn_rate = avoid_list[t]
+            else:
+                ship.turn_rate = output2
+

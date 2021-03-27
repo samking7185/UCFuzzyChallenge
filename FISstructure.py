@@ -89,12 +89,14 @@ class SingleFIS:
         self.mf1 = in1MF
         self.out = outMF_values
         self.rules = rulebase
+        self.rulebase = Rulebase()
 
     def compute(self, in1):
 
         rules = self.rules
         in1MF = self.mf1
         outMF = self.out
+        Fr = self.rulebase
 
         input1 = []
 
@@ -113,7 +115,8 @@ class SingleFIS:
 
         out_array = [out for out in full_out_array if out != []]
 
-        out = Defuzz(out_array, outMF)
+        mu_array = list(map(Fr.OR_rule, out_array))
+        out = Defuzz(mu_array, outMF)
 
         output = out.defuzz_out()
         return output
