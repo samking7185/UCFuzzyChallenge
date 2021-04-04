@@ -27,37 +27,49 @@ class FuzzyController(ControllerBase):
         angle_geneN = sorted(gene[0])
         angle_geneP = sorted(gene[1])
 
-        dist_gene = sorted(gene[2])
+        avoid_rule = gene[2]
+        thrust_rule = gene[3]
+        avoid_geneN = sorted(gene[4])
+        avoid_geneP = sorted(gene[5])
 
         angle_geneN = [x * 360 for x in angle_geneN]
         angle_geneP = [x * 360 for x in angle_geneP]
 
         angleMF_values = [(-360, angle_geneN[0], angle_geneN[1]),
-                          (angle_geneN[2], 0,  angle_geneP[0]), ( angle_geneP[1],  angle_geneP[2], 360)]
-
-        distanceMF_values = [(0, dist_gene[0], dist_gene[1]),
-                             (dist_gene[2], dist_gene[3], dist_gene[4]),
-                             (dist_gene[5], dist_gene[6], 1000)]
-
+                          (angle_geneN[2], 0,  angle_geneP[0]), (angle_geneP[1],  angle_geneP[2], 360)]
         shootMF_values = [(0, 3, 6), (4, 8, 10)]
-
-        aimMF_values = [(-180, -90, -0.5), (-1, 0, 1), (0.5, 90, 180)]
-
-        steerMF_values = [(-100, -99, 1), (-2, 0, 2), (1, 99, 100)]
-
-        targetRules = [0, 0, 0, 1, 1, 1, 0, 0, 0]
-        targetFIS = FIS([angleMF_values, distanceMF_values, shootMF_values], targetRules)
-
-        shootRules = [0, 1, 2]
-        shootFIS = SingleFIS([aimMF_values, steerMF_values], shootRules)
-
-        self.shoot = shootFIS
+        targetRules = [0, 1, 0]
+        targetFIS = SingleFIS([angleMF_values, shootMF_values], targetRules)
         self.target = targetFIS
 
-        avoidMF_values = [(-180, -60, -30), (-40, -20, 0), (0, 20, 400), (30, 60, 1800)]
-        avoidRules = [0, 1, 2, 0]
-        avoidFIS = SingleFIS([avoidMF_values, steerMF_values], avoidRules)
+        aimMF_values = [(-180, -90, -0.5), (-1, 0, 1), (0.5, 90, 180)]
+        steerMF_values = [(-100, -99, 1), (-2, 0, 2), (1, 99, 100)]
+        shootRules = [0, 1, 2]
+        shootFIS = SingleFIS([aimMF_values, steerMF_values], shootRules)
+        self.shoot = shootFIS
+
+        collideMF_values = [(0, 80, 100), (80, 120, 160), (140, 160, 800)]
+        interceptMF_values = [(0, 0.8, 1.2), (0.8, 1.0, 10.0)]
+        # Outputs are NOTHING, TARGET, AVOID
+        threatMF_values = [(0, 0.6, 1.2), (1.0, 1.6, 2.2), (2.0, 2.5, 3.0)]
+        collideRules = [2, 1, 2, 1, 1, 0]
+        collideFIS = FIS([collideMF_values, interceptMF_values, threatMF_values], collideRules)
+        self.collide = collideFIS
+
+        avoidMF_values = [(-180, avoid_geneN[0], avoid_geneN[1]), (avoid_geneN[2], avoid_geneN[3], avoid_geneN[4]),
+                          (avoid_geneN[5], avoid_geneN[6], 0), (0, avoid_geneP[0], avoid_geneP[1]),
+                          (avoid_geneP[2], avoid_geneP[3], avoid_geneP[4]), (avoid_geneP[5], avoid_geneP[6], 180)]
+
+        veerMF_values = [(100, 70, 40), (60, 30, 0), (0, -30, -60), (-40, -70, -100)]
+        avoidRules = avoid_rule
+        thrustRules = thrust_rule
+        thrustMF_values = [(-200, -150, 0), (0, 150, 200)]
+        # avoidRules = [0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 3]
+        # thrustRules = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]
+        avoidFIS = FIS([interceptMF_values, avoidMF_values, veerMF_values], avoidRules)
+        thrustFIS = FIS([interceptMF_values, avoidMF_values, thrustMF_values], thrustRules)
         self.avoid = avoidFIS
+        self.thrust = thrustFIS
 
     def actions(self, ship: SpaceShip, input_data: Dict[str, Tuple]) -> None:
         """
@@ -129,60 +141,106 @@ class FuzzyController(ControllerBase):
                     elif angle < -180:
                         angle += 360
                 angle_array.append(angle)
-
             return angle_array
 
-        def get_drive_angle(goal):
-            local_x = ship.center_x - goal[0]
-            local_y = ship.center_y - goal[1]
-            phi = math.atan2(local_y, local_x) * 180 / math.pi
-            angle = phi + 90 - ship.angle
-            return angle
+        def get_velocity(path):
+            diviser = path[0]
+            vels = [x / diviser for x in path]
+            velocity = sum(vels) / len(vels)
+            return velocity
 
 # Targeting FIS
         targetFIS = self.target
         avoidFIS = self.avoid
+        thrustFIS = self.thrust
+        collideFIS = self.collide
+        shootFIS = self.shoot
 
         asteroid_list = input_data['asteroids']
         angle = get_angle(asteroid_list)
         distance = get_distance(asteroid_list)
 
-        shoot_list = []
-        avoid_list = []
-        if angle and distance:
-            for ang, dist in zip(angle, distance):
-                in1 = ang
-                in2 = dist
-                output = targetFIS.compute(in1, in2)
-                output1 = avoidFIS.compute(in1)
-                avoid_list.append(output1)
-                shoot_list.append(output)
-
-            if any(x > 7.15 for x in shoot_list):
-                ship.shoot()
-
-            n = 30
+        if asteroid_list:
+            n = 25
             asteroid_path = extend_path(asteroid_list, n)
             player_path = extend_player_path(ship, n)
-
             collision_array = [collide - player_path for collide in asteroid_path]
             collision_norms = list(map(extract_norms, collision_array))
-            s = collision_norms.index(min(collision_norms, key=min))
+            collision_input = list(map(min, collision_norms))
+            velocity_array = list(map(get_velocity, collision_norms))
+            collide_array = []
 
-            # Aiming FIS
-            shootFIS = self.shoot
-            shoot_idx = np.argmin(np.absolute(angle))
-            shoot_angle = angle[s]
+            nothing_array = []
+            target_array = []
+            avoid_array = []
 
-            output2 = shootFIS.compute(shoot_angle)
-            collision_list = list(itertools.chain.from_iterable(collision_norms))
+            # Find the index of the max value then check where the value falls
+            for dist, vel in zip(collision_input, velocity_array):
+                collide_value = collideFIS.compute(dist, vel)
+                collide_array.append(collide_value)
 
-            if any(y < 75 for y in collision_list):
-                # ship.turn_rate = output2
-                ship.thrust = -150
-                abs_list = list(map(abs, avoid_list))
-                t = abs_list.index(max(abs_list))
-                ship.turn_rate = avoid_list[t]
-            else:
+            collide_index = collide_array.index(max(collide_array))
+            collide_target = collide_array[collide_index]
+            shoot_array = []
+            for ang in angle:
+                output = targetFIS.compute(ang)
+                shoot_array.append(output)
+
+            if any(x > 7.15 for x in shoot_array):
+                ship.shoot()
+
+            if collide_target <= 1:
+                target_index = collision_norms.index(min(collision_norms, key=min))
+                shoot_angle = angle[target_index]
+                output2 = shootFIS.compute(shoot_angle)
                 ship.turn_rate = output2
+            elif 1 < collide_target <= 2:
+                target_index = collide_index
+                shoot_angle = angle[target_index]
+                output3 = shootFIS.compute(shoot_angle)
+                ship.turn_rate = output3
+            else:
+                target_index = collide_index
+                avoid_in2 = angle[target_index]
+                avoid_in1 = velocity_array[target_index]
+                output4 = avoidFIS.compute(avoid_in1, avoid_in2)
+                output5 = thrustFIS.compute(avoid_in1, avoid_in2)
+                ship.turn_rate = output4
+                ship.thrust = output5
+
+
+
+
+            # s = collision_norms.index(min(collision_norms, key=min))
+
+        # shoot_list = []
+        # avoid_list = []
+        # if angle and distance:
+        #     for ang, dist in zip(angle, distance):
+        #         in1 = ang
+        #         in2 = dist
+        #         output = targetFIS.compute(in1, in2)
+        #         output1 = avoidFIS.compute(in1)
+        #         avoid_list.append(output1)
+        #         shoot_list.append(output)
+        #
+        #     if any(x > 7.15 for x in shoot_list):
+        #         ship.shoot()
+
+        #     # Aiming FIS
+        #     shootFIS = self.shoot
+        #     shoot_idx = np.argmin(np.absolute(angle))
+        #     shoot_angle = angle[s]
+        #
+        #     output2 = shootFIS.compute(shoot_angle)
+        #     collision_list = list(itertools.chain.from_iterable(collision_norms))
+        #
+        #     if any(y < 75 for y in collision_list):
+        #         # ship.turn_rate = output2
+        #         ship.thrust = -150
+        #         abs_list = list(map(abs, avoid_list))
+        #         t = abs_list.index(max(abs_list))
+        #         ship.turn_rate = avoid_list[t]
+        #     else:
+        #         ship.turn_rate = output2
 

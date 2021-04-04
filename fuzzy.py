@@ -16,9 +16,9 @@ class Membership:
         ce = values[1]
         re = values[2]
 
-        if x >= le and x < ce:
+        if le <= x < ce:
             mu = (x - le)/(ce - le)
-        elif x >= ce and x <= re:
+        elif ce <= x <= re:
             mu = (re - x)/(re - ce)
         else:
             mu = 0
@@ -30,9 +30,9 @@ class Membership:
         ce = values[1]
         re = values[2]
 
-        if x >= le and x < ce:
+        if le <= x < ce:
             mu = (x - le)/(ce - le)
-        elif x >= ce and x <= re:
+        elif ce <= x <= re:
             mu = 1
         else:
             mu = 0
@@ -44,9 +44,9 @@ class Membership:
         ce = values[1]
         re = values[2]
 
-        if x >= le and x < ce:
+        if le <= x < ce:
             mu = 1
-        elif x >= ce and x <= re:
+        elif ce <= x <= re:
             mu = (re - x)/(re - ce)
         else:
             mu = 0
@@ -71,9 +71,9 @@ class MembershipArray:
 
         for i in range(len(xArray)):
             x = xArray[i]
-            if x >= le and x < ce:
+            if le <= x < ce:
                 mu = (x - le)/(ce - le)
-            elif x >= ce and x <= re:
+            elif ce <= x <= re:
                 mu = (re - x)/(re - ce)
             else:
                 mu = 0
@@ -90,9 +90,9 @@ class MembershipArray:
 
         for i in range(len(xArray)):
             x = xArray[i]
-            if x >= le and x < ce:
+            if le <= x < ce:
                 mu = (x - le)/(ce - le)
-            elif x >= ce and x <= re:
+            elif ce <= x <= re:
                 mu = 1
             else:
                 mu = 0
@@ -109,9 +109,9 @@ class MembershipArray:
 
         for i in range(len(xArray)):
             x = xArray[i]
-            if x >= le and x < ce:
+            if le <= x < ce:
                 mu = 1
-            elif x >= ce and x <= re:
+            elif ce <= x <= re:
                 mu = (re - x)/(re - ce)
             else:
                 mu = 0

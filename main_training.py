@@ -4,17 +4,17 @@ from CGA import CGA
 # ---------------------------------------------------- #
 # ---------------- Genetic Algorithm ------------------#
 # M must be even number
-M = 50
-MaxGen = 50
+M = 100
+MaxGen = 100
 Pc = 0.9
 Pm = 0.4
 Er = 0.2
 
-n = [3, 3, 7]
-UB = [-0.01, 1,  1000]
-LB = [-1, 0.01, 1]
+n = [3, 3, 12, 12, 7, 7]
+UB = [-0.01, 1, 4, 2, -10, 170]
+LB = [-1, 0.01, 0, 0, -170, 10]
 
-var = ['float', 'float', 'int']
+var = ['float', 'float', 'int', 'int', 'int', 'int']
 
 # Available settings
 settings = {
